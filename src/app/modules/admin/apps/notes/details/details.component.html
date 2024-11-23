@@ -1,0 +1,66 @@
+<div class="flex flex-col flex-auto md:w-160 md:min-w-160 -m-6">
+    <ng-container *ngIf="(note$ | async) as note">        
+        <div class="m-4">
+            <!-- Title -->
+            <div>
+                <input class="w-full p-2 text-2xl" [placeholder]="'Title'" [(ngModel)]="note.title"
+                    (input)="updateNoteDetails(note)">
+            </div>
+            <!-- Description  -->
+            <div class="flex w-full py-5 px-2">
+                <textarea class="w-full" [placeholder]="'Description'" [(ngModel)]="note.description"
+                    (input)="updateNoteDetails(note)" cdkTextareaAutosize></textarea>
+            </div>
+            <!-- Labels -->
+            <div class="mx-2 mt-4">
+                <mat-form-field appearance="fill">
+                    <select [(ngModel)]="note.label" (selectionChange)="updateNoteDetails(note)">
+                        <option *ngFor="let label of (labels$ | async)" [value]="label">{{ label }}</option>
+                    </select>
+                    
+                </mat-form-field>
+            </div>
+            <!-- Tags -->
+            <div class="flex flex-wrap items-center mx-1 mt-6">
+                <ng-container *ngFor="let tag of note.tags; trackBy: trackByFn">
+                    <div
+                        class="flex items-center m-1 py-0.5 px-3 rounded-full text-sm font-medium text-gray-500 bg-gray-100 dark:text-gray-300 dark:bg-gray-700">
+                        <div>{{ tag }}</div>
+                        <mat-icon class="ml-1 icon-size-4 cursor-pointer" [svgIcon]="'heroicons_solid:x-circle'"
+                            (click)="removeTag(note, tag)"></mat-icon>
+                    </div>
+                </ng-container>
+                <div>
+                    <input class="w-full ml-1.5 px-1 py-0.5" [placeholder]="'Add tag'"
+                        (keydown.enter)="addTag(note, newTagInput.value); newTagInput.value = ''" #newTagInput>
+                </div>
+            </div>
+            <!-- Add Actions -->
+            <ng-container *ngIf="!note.id">
+                <div class="flex items-center justify-end mt-4">
+                    <!-- Save -->
+                    <button mat-flat-button [color]="'primary'" [disabled]="!note.title && !note.description"
+                        (click)="createNote(note)">
+                        Save
+                    </button>
+                </div>
+            </ng-container>
+            <!-- Edit Actions -->
+            <ng-container *ngIf="note.id">
+                <div class="flex items-center justify-between mt-4">
+                    <div class="flex items-center space-x-2">
+                        <!-- Delete -->
+                        <button mat-icon-button (click)="deleteNote(note)" matDialogClose>
+                            <mat-icon [svgIcon]="'heroicons_outline:trash'"></mat-icon>
+                        </button>
+                    </div>
+                    <!-- Close -->
+                    <button mat-flat-button [color]="'primary'" (click)="updateNote(note)" matDialogClose>
+                        Update
+                    </button>
+                </div>
+            </ng-container>
+        </div>
+    </ng-container>
+
+</div>

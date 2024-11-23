@@ -1,0 +1,328 @@
+import {
+  CdkDrag,
+  CdkDragDrop,
+  CdkDragHandle,
+  CdkDragPreview,
+  CdkDropList,
+  moveItemInArray,
+} from "@angular/cdk/drag-drop";
+import {
+  DatePipe,
+  DOCUMENT,
+  NgClass,
+  NgFor,
+  NgIf,
+  TitleCasePipe,
+} from "@angular/common";
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  Inject,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  ViewEncapsulation,
+} from "@angular/core";
+import { MatButtonModule } from "@angular/material/button";
+import { MatIconModule } from "@angular/material/icon";
+import { MatDrawer, MatSidenavModule } from "@angular/material/sidenav";
+import { MatTooltipModule } from "@angular/material/tooltip";
+import {
+  ActivatedRoute,
+  Router,
+  RouterLink,
+  RouterOutlet,
+} from "@angular/router";
+import {
+  FuseNavigationService,
+  FuseVerticalNavigationComponent,
+} from "@fuse/components/navigation";
+import { FuseMediaWatcherService } from "@fuse/services/media-watcher";
+import { TasksService } from "app/modules/admin/apps/tasks/tasks.service";
+import { Tag, Task } from "app/modules/admin/apps/tasks/tasks.types";
+import { filter, fromEvent, Subject, takeUntil } from "rxjs";
+
+@Component({
+  selector: "tasks-list",
+  templateUrl: "./list.component.html",
+  encapsulation: ViewEncapsulation.None,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true,
+  imports: [
+    MatSidenavModule,
+    RouterOutlet,
+    NgIf,
+    MatButtonModule,
+    MatTooltipModule,
+    MatIconModule,
+    CdkDropList,
+    NgFor,
+    CdkDrag,
+    NgClass,
+    CdkDragPreview,
+    CdkDragHandle,
+    RouterLink,
+    TitleCasePipe,
+    DatePipe,
+  ],
+})
+export class TasksListComponent implements OnInit, OnDestroy {
+  @ViewChild("matDrawer", { static: true }) matDrawer: MatDrawer;
+
+  drawerMode: "side" | "over";
+  selectedTask: any;
+  tags: Tag[];
+  tasks: any[];
+  tasksCount: any = {
+    completed: 0,
+    incomplete: 0,
+    total: 0,
+  };
+  default: any = {
+    title: "Placeholder",
+    description: "Placeholder description",
+    priority: "HIGH",
+    dueDate: "2025-06-15T00:00:00.000Z",
+    userId: {
+      id: localStorage.getItem('userId'),
+    },
+    course: {
+      id: 13,
+    },
+    tags: ["tag1", "tag2"],
+    completed: false,
+    createdAt: "2024-06-09T16:35:00.000Z",
+    updatedAt: "2024-06-09T16:35:00.000Z",
+  };
+  private _unsubscribeAll: Subject<any> = new Subject<any>();
+
+  /**
+   * Constructor
+   */
+  constructor(
+    private _activatedRoute: ActivatedRoute,
+    private _changeDetectorRef: ChangeDetectorRef,
+    @Inject(DOCUMENT) private _document: any,
+    private _router: Router,
+    private _tasksService: TasksService,
+    private _fuseMediaWatcherService: FuseMediaWatcherService,
+    private _fuseNavigationService: FuseNavigationService
+  ) {}
+
+  // -----------------------------------------------------------------------------------------------------
+  // @ Lifecycle hooks
+  // -----------------------------------------------------------------------------------------------------
+
+  /**
+   * On init
+   */
+  ngOnInit(): void {
+    // Get the tags
+    this._tasksService.tags$
+      .pipe(takeUntil(this._unsubscribeAll))
+      .subscribe((tags: Tag[]) => {
+        this.tags = tags;
+
+        // Mark for check
+        this._changeDetectorRef.markForCheck();
+      });
+
+    // Request the data from the server
+    this._tasksService.getTasks().subscribe((tasks: any[]) => {
+      console.log("before", tasks);
+
+      this.tasks = tasks;
+
+      console.log("after", tasks);
+
+      // Update the counts
+      this.tasksCount.total = this.tasks.length;
+      this.tasksCount.completed = this.tasks.filter(
+        (task) => task.completed
+      ).length;
+      this.tasksCount.incomplete =
+        this.tasksCount.total - this.tasksCount.completed;
+
+      // Mark for check
+      this._changeDetectorRef.markForCheck();
+
+      // Update the count on the navigation
+      setTimeout(() => {
+        // Get the component -> navigation data -> item
+        const mainNavigationComponent =
+          this._fuseNavigationService.getComponent<FuseVerticalNavigationComponent>(
+            "mainNavigation"
+          );
+
+        // If the main navigation component exists...
+        if (mainNavigationComponent) {
+          const mainNavigation = mainNavigationComponent.navigation;
+          const menuItem = this._fuseNavigationService.getItem(
+            "apps.tasks",
+            mainNavigation
+          );
+
+          // Update the subtitle of the item
+          menuItem.subtitle = this.tasksCount.incomplete + " remaining tasks";
+
+          // Refresh the navigation
+          mainNavigationComponent.refresh();
+        }
+      });
+    });
+
+    console.log("tasks", this.tasks);
+
+    // Get the task
+    this._tasksService.task$
+      .pipe(takeUntil(this._unsubscribeAll))
+      .subscribe((task: any) => {
+        this.selectedTask = task;        
+        // Mark for check
+        this._changeDetectorRef.markForCheck();
+      });
+
+    // Subscribe to media query change
+    this._fuseMediaWatcherService
+      .onMediaQueryChange$("(min-width: 1440px)")
+      .pipe(takeUntil(this._unsubscribeAll))
+      .subscribe((state) => {
+        // Calculate the drawer mode
+        this.drawerMode = state.matches ? "side" : "over";
+
+        // Mark for check
+        this._changeDetectorRef.markForCheck();
+      });
+
+    // Listen for shortcuts
+    fromEvent(this._document, "keydown")
+      .pipe(
+        takeUntil(this._unsubscribeAll),
+        filter<KeyboardEvent>(
+          (event) =>
+            (event.ctrlKey === true || event.metaKey) && // Ctrl or Cmd
+            (event.key === "/" || event.key === ".") // '/' or '.' key
+        )
+      )
+      .subscribe((event: KeyboardEvent) => {
+        // If the '/' pressed
+        if (event.key === "/") {
+          this.createTask("task", this.default);
+        }
+
+        // If the '.' pressed
+        if (event.key === ".") {
+          this.createTask("section", this.default);
+        }
+      });
+
+    console.log("tasks", this.tasks);
+  }
+
+  /**
+   * On destroy
+   */
+  ngOnDestroy(): void {
+    // Unsubscribe from all subscriptions
+    this._unsubscribeAll.next(null);
+    this._unsubscribeAll.complete();
+  }
+
+  // -----------------------------------------------------------------------------------------------------
+  // @ Public methods
+  // -----------------------------------------------------------------------------------------------------
+
+  /**
+   * On backdrop clicked
+   */
+  onBackdropClicked(): void {
+    // Go back to the list
+    this._router.navigate(["./"], { relativeTo: this._activatedRoute });
+
+    // Mark for check
+    this._changeDetectorRef.markForCheck();
+  }
+
+  /**
+   * Create task
+   *
+   * @param type
+   */
+  createTask(type: "task" | "section", task: any): void {
+    // Create the task
+    this._tasksService.createTask(type, task).subscribe((newTask) => {
+      console.log("newTask", newTask);
+
+      // Assuming newTask has all necessary properties
+      this.tasks.push(newTask);
+
+      // Go to the new task
+      this._router.navigate(["./", newTask.id], {
+        relativeTo: this._activatedRoute,
+      });
+
+      // Mark for check
+      this._changeDetectorRef.markForCheck();
+    });
+  }
+
+  /**
+   * Export PDF
+   */
+
+  exportPdf() {
+    this._tasksService.exportTasksPdf().subscribe((response) => {
+      const blob = new Blob([response], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url);
+    });
+  }
+
+  /**
+   * Toggle the completed status
+   * of the given task
+   *
+   * @param task
+   */
+  toggleCompleted(task: any): void {
+    // Toggle the completed status
+    task.completed = !task.completed;
+
+    // Update the task on the server
+    this._tasksService.updateTask(task).subscribe();
+
+    // Mark for check
+    this._changeDetectorRef.markForCheck();
+  }
+
+  /**
+   * Task dropped
+   *
+   * @param event
+   */
+  dropped(event: CdkDragDrop<Task[]>): void {
+    // Move the item in the array
+    moveItemInArray(
+      event.container.data,
+      event.previousIndex,
+      event.currentIndex
+    );
+
+    // Save the new order
+    this._tasksService.updateTasksOrders(event.container.data).subscribe();
+
+    // Mark for check
+    this._changeDetectorRef.markForCheck();
+  }
+
+  /**
+   * Track by function for ngFor loops
+   *
+   * @param index
+   * @param item
+   */
+  trackByFn(index: number, item: any): any {
+    return item.id || index;
+  }
+}

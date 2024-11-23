@@ -1,0 +1,17 @@
+/* ----------------------------------------------------------------------------------------------------- */
+/*  @ Import/write your custom styles here.
+/*  @ Styles from this file will override 'vendors.scss' and Fuse's base styles.
+/* ----------------------------------------------------------------------------------------------------- */
+.custom-notification-overlay {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  
+  .mat-mdc-snack-bar-container {
+    &.custom-notification-overlay {
+      .mdc-snackbar__surface {
+        background-color: transparent !important;
+        box-shadow: none !important;
+      }
+    }
+  }
